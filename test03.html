@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+
+const child_default_reducer = (prev,action) =>
+{
+	var nxt = {...prev};
+	nxt.counter += 1;
+	return nxt;
+};
+
+const child_custom_reducer = (prev,action) =>
+{
+	if ( action.hasOwnProperty ("source") )
+	{
+		console.log ("foreign action");
+	}
+	var nxt = child_default_reducer (prev, action);
+	nxt.text.push (action.hasOwnProperty ("source") ? action.source : "self");
+	nxt.counter += 1;
+	return nxt;
+};
+
+const help_send_foreign_dispatch = (foreign_dispatch, action) =>
+{
+	jQuery.each (Object.keys (foreign_dispatch), (i, source) => {
+		jQuery.each (foreign_dispatch[source], (j, dispatch) => {
+			dispatch ({source: source, ...action});
+		});
+	});
+};
+
+const ChildApp = (props) =>
+{
+	const { reducer = child_default_reducer, foreign_dispatch = [], ...rest } = props;
+
+	const children = [
+		e ("div", {}, rest.output.text.join (" ")),
+		e ("button", {onClick: (evt) => { rest.dispatch ({});help_send_foreign_dispatch (foreign_dispatch, {});}}, `Click me dispatch default + onClick ${rest.output.counter}`)
+	];
+	return e ("div", {}, children);
+};
+
+const App = () =>
+{
+	console.log ("render App");
+	const [childAOutput, dispatchChildAOutput] = React.useReducer (child_custom_reducer, {counter: 0, text: []});
+	const [childBOutput, dispatchChildBOutput] = React.useReducer (child_custom_reducer, {counter: 0, text: []});
+	const fd_a = {"a": [dispatchChildBOutput]};
+	const fd_b = {"b": [dispatchChildAOutput]};
+
+	const children = [
+		e (ChildApp, {output: childAOutput, dispatch: dispatchChildAOutput, foreign_dispatch: fd_a}),
+		e (ChildApp, {output: childBOutput, dispatch: dispatchChildBOutput, foreign_dispatch: fd_b})
+	];
+
+	return e ("div", {}, children);
+};
+
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+	</body>
+</html>
+	

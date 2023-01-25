@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>D3 trees</title>
+		<style>
+
+div#root_dynamic {
+	width: 100%;
+	height: 400px;
+}
+
+div#root_dynamic > svg {
+	width: 100%;
+	height: 100%;
+}
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/d3.js"></script>
+		<script>
+
+const getCircularReplacer = () => {
+  const seen = new WeakSet();
+  return (key, value) => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+    }
+    return value;
+  };
+};
+
+// Collapse the node and all it's children
+var collapse = function (d)
+{
+	if (d.children !== undefined)
+	{
+		d._children = d.children
+		d._children.forEach(collapse)
+		d.children = null
+	}
+};
+
+// Creates a curved (diagonal) path from parent to the child nodes
+const diagonal = (s, d) =>
+{
+	return `M ${s.y} ${s.x} C ${(s.y + d.y) / 2} ${s.x}, ${(s.y + d.y) / 2} ${d.x}, ${d.y} ${d.x}`;
+};
+
+const node_enter = (enter, t, y0, x0) =>
+{
+	var node = enter.append ("g")
+		.attr ("class", "node")
+		.attr ("transform", (d) => `translate(${y0},${x0})`)
+		.call ((g) => { return g.transition (t).attr ("transform", (d) => `translate(${d.y},${d.x})`); });
+
+	node.append ("circle")
+		.attr ("class", "node")
+		.attr ("data-typ", "node")
+		.attr ("data-name", (d) => d.data.name)
+		.attr ("r", 1e-6)
+		.style ("fill", (d) => { return d._children !== undefined && d._children !== null ? "lightsteelblue" : "#fff"; })
+		.call ((circle) => {
+			return circle.transition (t)
+				.attr ('r', 10)
+				.style ("fill", (d) => { return d._children !== undefined && d._children !== null ? "lightsteelblue" : "#fff"; })
+				.attr ('cursor', 'pointer');
+		});
+
+	node.append ("text")
+		.attr ("dy", ".35em")
+		.attr ("x", (d) => { return d.children !== undefined && d._children !== null ? -13 : 13; })
+		.attr ("text-anchor", (d) => { return d.children !== undefined && d._children !== null ? "end" : "start"; })
+		.text ((d) => d.data.display_name);	
+
+	return node;
+};
+
+const node_update = (update) =>
+{
+	update.select ("text")
+		.text ((d) => d.data.display_name);
+	update.select ("circle")
+		.style ("fill", (d) => { return d._children !== undefined && d._children !== null ? "lightsteelblue" : "#fff"; });
+	return update;
+};
+
+const node_exit = (exit, t, y, x) =>
+{
+	// On exit reduce the node circles size to 0
+	exit.select ("circle")
+		.call ((circle) => {
+			return circle.transition (t)
+				.attr ('r', 1e-6);
+		});
+
+	// On exit reduce the opacity of text labels
+	exit.select ("text")
+		.call ((text) => {
+			return text.transition (t)
+				.style ('fill-opacity', 1e-6);
+		});
+
+	return exit.transition (t)
+		.attr ("transform", (d) => `translate(${y},${x})`)
+		.remove ();
+};
+
+const link_enter = (enter, t, y0, x0) =>
+{
+	var node = enter.insert ("path", "g")
+		.attr ("class", "link")
+		.attr ('d', (d) => {
+			var o = {x: x0, y: y0};
+			return diagonal (o, o);
+		})
+		.call ((path) => {
+			return path.transition (t)
+				.attr ("d", (d) => diagonal (d, d.parent));
+		});
+	return node;
+};
+
+const link_exit = (exit, t, y, x) =>
+{
+	exit.call ((path) => {
+		console.log ("exit with path: ",path);
+		return path.transition (t)
+			.attr ("d", (d) => {
+				var o = {x: x, y: y};
+				return diagonal(o, o);
+			});
+		});
+	return exit.transition (t)
+		.remove ();
+};
+
+const update = (svg, treemap, root, source) =>
+{
+	console.log ("update called with root: ",root);
+	console.log ("update called with source: ",source);
+	// Assigns the x and y position for the nodes
+	var treeData = treemap (root.count ());
+
+	// Compute the new tree layout.
+	var nodes = treeData.descendants ();
+	var links = treeData.descendants ().slice (1);
+	const t = svg.transition ().duration (750);
+
+	// Normalize for fixed-depth.
+	nodes.forEach (function (d) { d.y = d.depth * 180});
+
+	console.log ("nodes: ",nodes);
+	// ****************** Nodes section ***************************
+
+	// So this seems to be required to trigger change in style?
+	// .data (nodes, (d) => d.data._id)
+	// which happens if d._children is present/absent
+	// so (d) => d.data._id is the key function
+	// https://github.com/d3/d3-selection/blob/main/README.md#selection_data
+
+
+	// Update the nodes...
+	var node = svg.selectAll ("g.node")
+		//.data (nodes, (d) => d.data._id) 
+		.data (nodes, (d,i) => { console.log ("Called keyfn with d: ",d," i: ",i); return d.data.name;}) 
+		//.data (nodes)
+		.join (
+			(enter) => node_enter (enter, t, source.y0, source.x0),
+			node_update,
+			(exit) => node_exit (exit, t, source.y, source.x)
+		);
+
+	var duration = 750;
+
+	// ****************** links section ***************************
+
+	// Update the links...
+	var link = svg.selectAll ('path.link')
+		.data (links, (d) => d.data.name)
+		//.data(links, (d) => d.data._id)
+		//.data(links)
+		.join (
+			(enter) => link_enter (enter, t, source.y0, source.x0),
+			(update) => {},
+			(exit) => link_exit (exit, t, source.y, source.x)
+		);
+
+	// Store the old positions for transition.
+	nodes.forEach (function (d) {
+		d.x0 = d.x;
+		d.y0 = d.y;
+	});
+
+};
+
+
+const treea = {
+	name: "a",
+	children: [
+		{
+			name: "b",
+			children: [
+				{
+					name: "c"
+				}
+			]
+		}
+	]
+};
+
+var ROOTA = null;
+
+const handle_click = (evt) =>
+{
+	console.log ("svg click evt.target: ",evt.target);
+	console.log (evt.target.parentElement);
+	var d = evt.target.parentElement.__data__;
+	//var source = evt.target.parentElement.__data__;
+	//var d = evt.target.parentElement.__data__.data;
+	if (d.children !== undefined && d.children !== null)
+	{
+		d._children = d.children;
+		d.children = null;
+	}
+	else
+	{
+		d.children = d._children;
+		d._children = null;
+	}
+
+	const svg_root = document.getElementById ("svg");
+	const width = svg_root.getBoundingClientRect ().width;
+	const height = svg_root.getBoundingClientRect ().height;
+	const tree_map = d3.tree ().size ([height, width]);
+	update (d3.select (svg_root.children.namedItem ("entity_graph")), tree_map, ROOTA, d);
+};
+
+const rendera = (svg_root) =>
+{
+	const width = svg_root.getBoundingClientRect ().width;
+	const height = svg_root.getBoundingClientRect ().height;
+	const tree_map = d3.tree ().size ([height, width]);
+
+	svg_root.addEventListener ("click", handle_click);
+
+	tree_data = treea;
+
+	var root = d3.hierarchy (tree_data, function(d) { return d.children; });
+	root.x0 = height / 2;
+	root.y0 = 0;
+	ROOTA = root;
+	console.log ("initial root: ",JSON.stringify (root,getCircularReplacer ()));
+	update (d3.select (svg_root.children.namedItem ("entity_graph")), tree_map, root, root);
+};
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const svg_root = document.getElementById ("svg");
+
+		// render a
+		rendera (svg_root);
+	}
+};
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">
+			<svg id="svg" xmlns="http://www.w3.org/2000/svg">
+				<defs>
+					<style>@import url(css/app_entity_graph_svg.css);</style>
+				</defs>
+				<g id="entity_graph" transform="translate (50,10)"/>
+			</svg>
+		</div>
+		<p>Test d3 tree drawing</p>
+	</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+
+const help_hash_cyrb128 = (str) =>
+{
+    let h1 = 1779033703, h2 = 3144134277,
+        h3 = 1013904242, h4 = 2773480762;
+    for (let i = 0, k; i < str.length; i++)
+    {
+        k = str.charCodeAt(i);
+        h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+        h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+        h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+        h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+    }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    return [(h1^h2^h3^h4)>>>0, (h2^h1)>>>0, (h3^h1)>>>0, (h4^h1)>>>0];
+};
+
+const help_combinations = (s, n) =>
+{
+	if ( n === 1 )
+	{
+		return s;
+	}
+	else
+	{
+		return s.flatMap ((_, i) =>
+		{
+			if ( i + n > s.length )
+			{
+				return [];
+			}
+			else
+			{
+				const sl = s.slice (i+1);
+				const result = help_combinations (sl,n-1).map ((y) => [s[i], ...y]);
+				//const result_str = JSON.stringify (result);
+				//console.log (`sl: '${sl}' n: '${n}' result: '${result_str}'`);
+				return result;
+			}
+		});
+	}
+};
+
+const help_permute = (permutation) =>
+{
+	const length = permutation.length;
+	var result = [permutation.slice ()];
+	var c = new Array (length).fill (0);
+	var i = 1;
+	var k = undefined;
+	var p = undefined;
+
+	while (i < length)
+	{
+		if (c[i] < i)
+		{
+			k = i % 2 && c[i];
+			p = permutation[i];
+			permutation[i] = permutation[k];
+			permutation[k] = p;
+			++c[i];
+			i = 1;
+			result.push (permutation.slice ());
+		}
+		else
+		{
+			c[i] = 0;
+			++i;
+		}
+	}
+	return result;
+};
+
+const help_permutations = (s, n) =>
+{
+	const combs = help_combinations (s, n);
+	return combs.flatMap ((x) => { return help_permute (x); });
+};
+
+const help_partition = (a, pred) =>
+{
+	return a.reduce ( (acc, item) => {
+		var k = pred (item);
+		if ( acc.length > 0 )
+		{
+			var last_group = acc[acc.length-1];
+			var last_k = pred (last_group[last_group.length-1]);
+			if ( k === last_k )
+			{
+				last_group.push (item);
+			}
+			else
+			{
+				acc.push ([item]);
+			}
+		}
+		else
+		{
+			acc.push ([item]);
+		}
+		return acc;
+	}, []);
+};
+
+const help_sort_matrix = (m, cmp_fn) =>
+{
+	if ( m.length === 0 )
+	{
+		return m;
+	}
+	else
+	{
+		var nrows = m.length;
+		var ncols = m[0].length;
+		if ( ncols === 0 )
+		{
+			return m;
+		}
+		else
+		{
+			var indices = [...Array (nrows).keys ()];
+			indices.sort ((a,b) => { return cmp_fn (m[a][0],m[b][0]); });
+			var prev = help_partition (indices, (x) => { return m[x][0]; });
+			for (var i = 1;i < ncols;i++)
+			{
+				//console.log ("prev: ",prev);
+				const nxt = prev.reduce ( (acc,item) =>
+				{
+					item.sort ((a,b) => { return cmp_fn (m[a][i],m[b][i]); });
+					acc.push (...help_partition (item, (x) => { return m[x][i]; }));
+					return acc;
+				}, []);
+				prev = nxt; 
+			}
+			//console.log ("final prev: ",prev);
+			return prev.flatMap ((x) => x).map ((x) => m[x]);
+		}
+	}
+};
+
+const help_printable_chars = () =>
+{
+	return [...Array (127-32).keys ()].map ((x) => String.fromCharCode (x+32));
+};
+
+const log_matrix = (m) =>
+{
+	console.log ("[");
+	for (var i = 0;i<m.length;i++)
+	{
+		console.log (`  ${m[i]}`);
+	}
+	console.log ("]");
+};
+
+const App = (props) =>
+{
+	const handle_click_comb = React.useCallback ((evt) =>
+	{
+		max_n = 5;
+		for (var h = 2; h < max_n;h++)
+		{
+			const n = h;
+			console.time ("start data");
+			const pc = help_printable_chars ();
+			const data = help_combinations (pc, n); 
+			console.timeEnd ("start data");
+			console.log (`Generated ${data.length} sequences of length ${n} from reference length ${pc.length}`); 
+			console.time ("start hash");
+			var string_set = new Set ([]);
+			var hash_set = new Set ([]);
+			for (var i = 0; i < data.length; i++)
+			{
+				const str = data[i].join ("");
+				const hsh = help_hash_cyrb128 (str);
+				string_set.add (str);
+				hash_set.add (hsh);
+				//console.log (`str: '${str}' hsh: '${hsh}'`);
+			}
+			console.timeEnd ("start hash");
+			console.log (`${string_set.size} ${hash_set.size} ${string_set.size === hash_set.size}`);
+		}
+	}, []);
+
+	const handle_click_permute = React.useCallback ((evt) =>
+	{
+		const cmp_fn = (a,b) => { return a.localeCompare (b) };
+		const um = help_permute (["a","b","c","d"]);
+		log_matrix (um);
+		const sm = help_sort_matrix (um, cmp_fn);
+		log_matrix (sm);
+		log_matrix (um);
+	}, []);
+
+	const handle_click_permutations = React.useCallback ((evt) =>
+	{
+		const cmp_fn = (a,b) => { return a.localeCompare (b) };
+		const max_n = 6;
+		for (var h = 2; h < max_n;h++)
+		{
+			console.time ("start data");
+			const n = h;
+			const pc = help_printable_chars ().slice (0,26);
+			const um = help_permutations (pc, n);
+			console.timeEnd ("start data");
+			const data = help_sort_matrix (um, cmp_fn);
+			//log_matrix (data);
+			console.log (`Generated ${data.length} sequences of length ${n} from reference length ${pc.length}`); 
+			console.time ("start hash");
+			var string_set = new Set ([]);
+			var hash_set = new Set ([]);
+			for (var i = 0; i < data.length; i++)
+			{
+				const str = data[i].join ("");
+				const hsh = help_hash_cyrb128 (str);
+				string_set.add (str);
+				hash_set.add (hsh);
+				//console.log (`str: '${str}' hsh: '${hsh}'`);
+			}
+			console.timeEnd ("start hash");
+			console.log (`${string_set.size} ${hash_set.size} ${string_set.size === hash_set.size}`);
+		}
+	}, []);
+
+	var children = [
+		e ("button", {onClick: handle_click_comb}, "Start combinations"),
+		e ("button", {onClick: handle_click_permute}, "Start permute"),
+		e ("button", {onClick: handle_click_permutations}, "Start permutations")
+	];
+	return e ("div", {}, children);
+};
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}));
+	}
+};
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+		<p>Test a js hash function to diff data</p>
+	</body>
+</html>

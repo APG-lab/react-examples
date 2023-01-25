@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+table {
+	width: 100%;
+}
+
+table td {
+	width: 25%;
+}
+
+table td:nth-child(odd) {
+	background-color: steelblue; 
+}
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+
+const add_handlers = () =>
+{
+	var tbody = document.getElementById ("tb");
+	tbody.addEventListener ("click", click_handler)
+};
+
+const ChildAppEventRebind = (props) =>
+{
+	const dRef = React.useRef (null);
+	const outputRef = React.useRef (props.output);
+
+	React.useEffect (() =>
+	{
+		outputRef.current = props.output;
+	}, [props.output]);
+
+	React.useEffect (() =>
+	{
+		const dBody = dRef.current;
+		console.log ("reload event handlers rebind");
+		const click_handler = (evt) =>
+		{
+			//console.log ("click evt");
+			if ( evt.target.tagName == "BUTTON" )
+			{
+				// Does not change from initial render
+				console.log ("output before dispatch rebind: ",JSON.stringify (outputRef));
+				props.dispatch ({});
+			}
+		};
+		dBody.addEventListener ("click", click_handler);
+
+		return () => {
+			dBody.removeEventListener ("click", click_handler);
+		};
+	}, []);
+	const children = [
+		e ("div", {}, props.output.text.join (" ")),
+		e ("button", {}, `Click me dispatch + eventHandlerRebind ${props.output.counter}`)
+	];
+	return e ("div", {ref: dRef}, children);
+};
+
+
+const ChildAppEvent = (props) =>
+{
+	const dRef = React.useRef (null);
+
+	React.useEffect (() =>
+	{
+		const dBody = dRef.current;
+		console.log ("reload event handlers");
+		const click_handler = (evt) =>
+		{
+			//console.log ("click evt");
+			if ( evt.target.tagName == "BUTTON" )
+			{
+				// Does not change from initial render
+				console.log ("output before dispatch: ",JSON.stringify (props.output));
+				props.dispatch ({});
+			}
+		};
+		dBody.addEventListener ("click", click_handler);
+
+		return () => {
+			dBody.removeEventListener ("click", click_handler);
+		};
+	}, []);
+	const children = [
+		e ("div", {}, props.output.text.join (" ")),
+		e ("button", {}, `Click me dispatch + eventHandler ${props.output.counter}`)
+	];
+	return e ("div", {ref: dRef}, children);
+};
+
+
+const ChildApp = (props) =>
+{
+	const children = [
+		e ("div", {}, props.output.text.join (" ")),
+		e ("button", {onClick: (evt) => props.dispatch ({})}, `Click me dispatch + onClick ${props.output.counter}`)
+	];
+	return e ("div", {}, children);
+};
+
+const child_reducer = (prev, action) =>
+{
+	var nxt = {...prev,text: [...prev.text]};
+	nxt.text.push (nxt.counter);
+	nxt.counter += 1;
+	return nxt;
+};
+
+const App = () =>
+{
+	console.log ("render App");
+	const [output, setOutput] = React.useState ({counter: 0, text: []});
+	const [childOutput, dispatchChildOutput] = React.useReducer (child_reducer, {counter: 0, text: []});
+	const [childEventOutput, dispatchChildEventOutput] = React.useReducer (child_reducer, {counter: 0, text: []});
+	const [childEventRebindOutput, dispatchChildEventRebindOutput] = React.useReducer (child_reducer, {counter: 0, text: []});
+
+	const children = [
+		e ("div", {}, output.text.join (" ")),
+		e ("button", {onClick: (evt) => setOutput ((prev) => { console.log ("clicked");var nxt = {...prev,text: [...prev.text]};nxt.text.push (nxt.counter);nxt.counter += 1;return nxt;})}, "Click me setState + onClick"),
+		e (ChildApp, {output: childOutput, dispatch: dispatchChildOutput}),
+		e (ChildAppEvent, {output: childEventOutput, dispatch: dispatchChildEventOutput}),
+		e (ChildAppEventRebind, {output: childEventRebindOutput, dispatch: dispatchChildEventRebindOutput})
+	];
+
+	return e ("div", {}, children);
+};
+
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+	</body>
+</html>
+	

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+
+const child_default_reducer = (prev,action) =>
+{
+	var nxt = {...prev};
+	nxt.counter += 1;
+	return nxt;
+};
+
+const child_custom_reducer = (prev,action) =>
+{
+	var nxt = child_default_reducer (prev, action);
+	nxt.counter += 1;
+	return nxt;
+};
+
+const ChildAppDefault = (props) =>
+{
+	const { reducer = child_default_reducer, ...rest } = props;
+	const [childOutput, dispatchChildOutput] = React.useReducer (reducer, {counter: 0, text: []});
+
+	const children = [
+		e ("div", {}, childOutput.text.join (" ")),
+		e ("button", {onClick: (evt) => dispatchChildOutput ({})}, `Click me dispatch default + onClick ${childOutput.counter}`)
+	];
+	return e ("div", {}, children);
+};
+
+const ChildAppOverride = (props) =>
+{
+	const { reducer = child_default_reducer, ...rest } = props;
+	const [childOutput, dispatchChildOutput] = React.useReducer (reducer, {counter: 0, text: []});
+	const children = [
+		e ("div", {}, childOutput.text.join (" ")),
+		e ("button", {onClick: (evt) => dispatchChildOutput ({})}, `Click me dispatch override + onClick ${childOutput.counter}`)
+	];
+	return e ("div", {}, children);
+};
+
+const App = () =>
+{
+	console.log ("render App");
+			
+
+	const children = [
+		e (ChildAppDefault, {}),
+		e (ChildAppOverride, {reducer: child_custom_reducer})
+	];
+
+	return e ("div", {}, children);
+};
+
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+	</body>
+</html>
+	

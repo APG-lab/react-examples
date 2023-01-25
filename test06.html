@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+#log {
+	white-space: pre-wrap;
+}
+
+div.square {
+	width: 100px;
+	height: 100px;
+	border: solid 2px black;
+}
+
+div.square.active {
+	border: solid 2px blue;
+}
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+var EVENT_HANDLERS_REGISTER = [];
+
+// Create a unique id so we can track objects and the same for functions
+(function() {
+if ( typeof Object.id != "undefined" ) return;
+
+var id = 0;
+var fid = 0;
+
+Object.id = function(o) {
+    if ( typeof o.__uniqueid != "undefined" ) {
+	return o.__uniqueid;
+    }
+
+    Object.defineProperty(o, "__uniqueid", {
+	value: ++id,
+	enumerable: false,
+	// This could go either way, depending on your 
+	// interpretation of what an "id" is
+	writable: false
+    });
+
+    return o.__uniqueid;
+};
+
+Function.fid = function(o) {
+    if ( typeof o.__uniquefid != "undefined" ) {
+	return o.__uniquefid;
+    }
+
+    Object.defineProperty(o, "__uniquefid", {
+	value: ++fid,
+	enumerable: false,
+	// This could go either way, depending on your 
+	// interpretation of what an "id" is
+	writable: false
+    });
+
+    return o.__uniquefid;
+};
+
+
+})();
+
+// Add hooks to track event listeners
+(function () {
+
+	// === does not seem to work here
+	if (EventTarget.prototype.original_addEventListener == null)
+	{
+		EventTarget.prototype.original_addEventListener = EventTarget.prototype.addEventListener;
+
+		const addEventListener_hook = function (typ, fn, opt)
+		{
+			// We only track event handlers that we explicitly added
+			if ( opt !== null && ( typeof opt === "function" || typeof opt === "object" ) && opt.hasOwnProperty ("tracked") )
+			{
+				EVENT_HANDLERS_REGISTER.push ([false, typ, Function.fid (fn), opt["tracked"]]);
+			}
+			this.original_addEventListener (typ, fn, opt);
+		};
+		EventTarget.prototype.addEventListener = addEventListener_hook;
+	}
+	if (EventTarget.prototype.original_removeEventListener == null)
+	{
+		EventTarget.prototype.original_removeEventListener = EventTarget.prototype.removeEventListener;
+
+		const removeEventListener_hook = function (typ, fn, opt)
+		{
+			// We only track event handlers that we explicitly added
+			const fid = Function.fid (fn);
+			const deleted_handlers = EVENT_HANDLERS_REGISTER.filter ((x) => { return x[1] === typ && x[2] === fid; });
+			deleted_handlers.map ((x) => { x[0] = true; });
+			this.original_removeEventListener (typ, fn, opt);
+		};
+		EventTarget.prototype.removeEventListener = removeEventListener_hook;
+	}
+})();
+
+// useCallbackRef hook (this lets us use a callback ref, which gets called when its node changes, with behaviour on unmount)
+const useRefWithCallback = function (onMount, onUnmount)
+{
+	const nodeRef = React.useRef (null);
+
+	const setRef = React.useCallback ((node) =>
+	{
+		if (nodeRef.current)
+		{
+			onUnmount (nodeRef.current);
+		}
+
+		nodeRef.current = node;
+
+		if (nodeRef.current)
+		{
+			onMount (nodeRef.current);
+		}
+	}, [onMount, onUnmount]);
+
+	return setRef;
+};
+
+const log = (msg) =>
+{
+	var div = document.getElementById ("root_dynamic");
+	div.dispatchEvent (new CustomEvent ("log", {bubbles: true, detail: msg}));
+};
+
+const ChildAppA = (props) =>
+{
+	const [count, setCount] = React.useState (0);
+	log (`${props.name} render Child`);
+	const children = [
+		e ("button", {onClick: function (evt) { const whoami = Function.fid (arguments.callee);log (`${props.name} from click ${whoami}`);setCount ((prev) => prev + 1); }}, `Increment ${props.name}`),
+		e ("p", {}, count)
+	];
+	return e ("div", {}, children);
+};
+
+const ChildAppB = (props) =>
+{
+	const [count, setCount] = React.useState (0);
+	log (`${props.name} render Child`);
+
+	const handle_click = React.useCallback (function (evt) {
+		const whoami = Function.fid (arguments.callee);
+		log (`${props.name} from click ${whoami}`);
+		setCount ((prev) => prev + 1);
+	}, [setCount]);
+
+	const children = [
+		e ("button", {onClick: handle_click}, `Increment ${props.name}`),
+		e ("p", {}, count)
+	];
+	return e ("div", {}, children);
+};
+
+const ChildAppC = (props) =>
+{
+	const [count, setCount] = React.useState (0);
+	log (`${props.name} render Child`);
+
+	React.useEffect (() =>
+	{
+		const handle_click = function (evt) {
+			const whoami = Function.fid (arguments.callee);
+			if ( evt.target.id === `increment_${props.name}` )
+			{
+				log (`${props.name} from click ${whoami}`);
+				setCount ((prev) => prev + 1);
+			}
+		};
+		document.addEventListener ("click", handle_click, {tracked: `${props.name} click document`});
+
+		return () => {
+			document.removeEventListener ("click", handle_click);
+		};
+	}, [setCount]);
+	
+
+	const children = [
+		e ("button", {id: `increment_${props.name}`}, `Increment ${props.name}`),
+		e ("p", {}, count)
+	];
+	return e ("div", {}, children);
+};
+
+const ChildAppD = (props) =>
+{
+	const [count, setCount] = React.useState (0);
+	const buttonRef = React.useRef (null);
+	log (`${props.name} render Child`);
+
+	React.useEffect (() =>
+	{
+		const button = buttonRef.current;
+		const handle_click = function (evt) {
+			const whoami = Function.fid (arguments.callee);
+			if ( evt.target.id === `increment_${props.name}` )
+			{
+				log (`${props.name} from click ${whoami}`);
+				setCount ((prev) => prev + 1);
+			}
+		};
+		button.addEventListener ("click", handle_click, {tracked: `${props.name} click buttonRef`});
+		return () => {
+			button.removeEventListener ("click", handle_click);
+		};
+	}, [setCount]);
+
+	const children = [
+		e ("button", {id: `increment_${props.name}`, ref: buttonRef}, `Increment ${props.name}`),
+		e ("p", {}, count)
+	];
+	return e ("div", {}, children);
+};
+
+const ChildAppE = (props) =>
+{
+	const [squares, setSquares] = React.useState ({active: null});
+	// Note that we do not wrap this in React.useCallback to demonstrate that event handlers are removed
+	const handle_move = (evt) =>
+	{
+		log (`${props.name} ${evt.target.dataset.name} ${evt.clientX},${evt.clientY}`);
+	};
+	const focusRef = useRefWithCallback (
+		(node) => { node.addEventListener ("mousemove", handle_move, {tracked: `${props.name} event mousemove from ${node.dataset.name}`}); },
+		(node) => { node.removeEventListener ("mousemove", handle_move); }
+	);
+
+	const handle_click = React.useCallback ((evt) =>
+	{
+		setSquares ((prev) => { return prev.active === null ? {active: evt.target.dataset.name} : {active: null}; });
+	}, [setSquares]);
+
+	const props_one = squares.active === "one" ?
+		{ref: focusRef, class: "square active", "data-name": "one", onClick: handle_click} :
+		{class: "square", "data-name": "one", onClick: handle_click};
+	const props_two = squares.active === "two" ?
+		{ref: focusRef, class: "square active", "data-name": "two", onClick: handle_click} :
+		{class: "square", "data-name": "two", onClick: handle_click};
+
+	const children = [
+		e ("div", props_one),
+		e ("div", props_two)
+	];
+	return e ("div", {}, children);
+};
+
+const ParentApp = (props) =>
+{
+	const [showChild, setShowChild] = React.useState (false);
+	
+	const handle_click = React.useCallback ((evt) => {
+		setShowChild ((prev) => !prev);
+	}, [setShowChild]);
+	var children = [
+		e ("button", {onClick: handle_click}, showChild ? `Hide ${props.name}` : `Show ${props.name}`)
+	];
+	if ( showChild )
+	{
+		children.push (e (props.app, {name: props.name}));
+	}
+	return e ("div", {}, children);
+};
+
+const App = (props) =>
+{
+	const handle_click = React.useCallback ((evt) => {
+		log ("\n\nAll event handlers:");
+		EVENT_HANDLERS_REGISTER.map ((x) => { log (JSON.stringify (x)); });
+	}, []);
+	const children = [
+		e (ParentApp, {app: ChildAppA, name: "A"}),
+		e (ParentApp, {app: ChildAppB, name: "B"}),
+		e (ParentApp, {app: ChildAppC, name: "C"}),
+		e (ParentApp, {app: ChildAppD, name: "D"}),
+		e (ParentApp, {app: ChildAppE, name: "E"}),
+		e ("button", {onClick: handle_click}, "List all event handlers") 
+	];
+	return e ("div", {}, children);
+};
+
+const log_handler = (evt) =>
+{
+	//console.log ("log_handler evt: ",evt);
+	const div = document.getElementById ("log");
+	div.append (evt.detail);
+	div.append ("\n");
+};
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		document.addEventListener ("log", log_handler, {tracked: "debug logger"});
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+		<p>This demo tracks rendering, references and registration of event handlers.</p>
+		<div id="log"></div>
+	</body>
+</html>

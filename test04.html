@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script>
+const e = React.createElement;
+
+const default_value_store_initial_value = {data: {}, active: []};
+const default_value_store_reducer = (prev, action) =>
+{
+	console.log ("default_value_store_reducer action: ",action);
+	if ( action.coord.col % 2 == 1 )
+	{
+		console.log ("return prev");
+		return prev;
+	}
+	else
+	{
+		console.log ("return nxt");
+		var nxt = {...prev};
+		return nxt;
+	}
+};
+
+const ValueStoreContext = React.createContext (default_value_store_initial_value);
+const ValueStoreDispatchContext = React.createContext ({dispatch: () => {}});
+
+const ValueStoreProvider = (props) =>
+{
+	console.log ("ValueStoreProvider props: ",props);
+	const {value_store_reducer = default_value_store_reducer, initial_value = default_value_store_initial_value, ...rest} = props;
+	const [valueStore, valueStoreDispatch] = React.useReducer (value_store_reducer, initial_value);
+
+	return e (ValueStoreContext.Provider, {value: valueStore},
+		e (ValueStoreDispatchContext.Provider, {value: valueStoreDispatch},
+			...rest.children
+		)
+	);
+};
+
+const useValueStore = () =>
+{
+	return React.useContext (ValueStoreContext);
+};
+
+const useValueStoreDispatch = () =>
+{
+	return React.useContext (ValueStoreDispatchContext);
+};
+
+const child_default_reducer = (prev,action) =>
+{
+	var nxt = {...prev};
+	nxt.counter += 1;
+	return nxt;
+};
+
+const child_custom_reducer = (prev,action) =>
+{
+	if ( action.hasOwnProperty ("source") )
+	{
+		console.log ("foreign action");
+	}
+	var nxt = child_default_reducer (prev, action);
+	nxt.text.push (action.hasOwnProperty ("source") ? action.source : "self");
+	nxt.counter += 1;
+	return nxt;
+};
+
+const help_send_foreign_dispatch = (foreign_dispatch, action) =>
+{
+	jQuery.each (Object.keys (foreign_dispatch), (i, source) => {
+		jQuery.each (foreign_dispatch[source], (j, dispatch) => {
+			dispatch ({source: source, ...action});
+		});
+	});
+};
+
+const ChildApp = (props) =>
+{
+	const { reducer = child_default_reducer, foreign_dispatch = [], ...rest } = props;
+
+	const children = [
+		e ("div", {}, rest.output.text.join (" ")),
+		e ("button", {onClick: (evt) => { rest.dispatch ({});help_send_foreign_dispatch (foreign_dispatch, {});}}, `Click me dispatch default + onClick ${rest.output.counter}`)
+	];
+	return e ("div", {}, children);
+};
+
+// A change to valueStore triggers a re-render
+const TableApp = (props) =>
+{
+	const tRef = React.useRef ();
+	const valueStore = useValueStore (); 
+	const valueStoreDispatch = useValueStoreDispatch ();
+
+	React.useEffect (() =>
+	{
+		const tbody = tRef.current;
+		
+
+		const handle_click = (evt) => {
+			const coord = {row: evt.target.dataset.row, col: evt.target.dataset.col};
+			valueStoreDispatch ({action: "click", coord: coord});
+		};
+
+		tbody.addEventListener ("click", handle_click);
+
+		return () => {
+			tbody.removeEventListener ("click", handle_click);
+		};
+	}, [valueStoreDispatch]);
+
+	console.log ("TableApp valueStore: ", valueStore);
+	const children_thead = e ("tr", {}, valueStore.data.header.map ((x) => e ("th", {}, x)));
+	const children_tbody = valueStore.data.rows.map ((row,i) => {
+		return e ("tr", {}, valueStore.data.header.map ((col, j) => {
+			return e ("td", {"data-row": i,"data-col": j}, row[col]);
+		}));
+	});
+	const children_table = [
+		e ("thead", {}, children_thead),
+		e ("tbody", {}, children_tbody)
+	];
+	return e ("table", {ref: tRef}, children_table);
+};
+
+const App = () =>
+{
+	console.log ("render App");
+	const [childAOutput, dispatchChildAOutput] = React.useReducer (child_custom_reducer, {counter: 0, text: []});
+	const [childBOutput, dispatchChildBOutput] = React.useReducer (child_custom_reducer, {counter: 0, text: []});
+	const fd_a = {"a": [dispatchChildBOutput]};
+	const fd_b = {"b": [dispatchChildAOutput]};
+
+	// pretend this was loaded from the database on app load
+	const table_data = {
+		header: ["species", "name"],
+		rows: [{species: "cat", name: "Molly"}, {species: "dog", name: "Max"}]
+	};
+
+	const children = [
+		e (ChildApp, {output: childAOutput, dispatch: dispatchChildAOutput, foreign_dispatch: fd_a}),
+		e (TableApp, {})
+	];
+	return e ("div", {}, e (ValueStoreProvider, {initial_value: {...default_value_store_initial_value, data: table_data}}, children));
+};
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+		<p>If state changes then a re-render of the table is triggered.</p>
+	</body>
+</html>
+	
