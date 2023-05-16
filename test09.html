@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Data Import</title>
+		<style>
+
+		</style>
+		<script src="js/jquery-3.6.1.min.js"></script>
+		<script src="js/react.production.min.js"></script>
+		<script src="js/react-dom.production.min.js"></script>
+		<script src="js/helpers.js"></script>
+		<script src="js/table.js"></script>
+		<script src="js/table_searchable.js"></script>
+		<script>
+const e = React.createElement;
+
+const the_reducer = (prev, action) => {
+	var nxt = {...prev};
+
+	switch (action.action)
+	{
+		default:
+			console.log (`Unrecognised action: ${action.action}`);
+	};
+
+	return nxt;
+};
+
+const InitialStateNotRendered = (props) =>
+{
+	const [reducerState, reducerDispatch] = React.useReducer (the_reducer, props.initial_state);
+
+	return e ("p", {}, `props.some_state: ${props.some_state} reducerState.some_state: ${reducerState.some_state}`);
+};
+
+const App = () =>
+{
+	console.log ("render with");
+	const [someState, setSomeState] = React.useState (0);
+
+	const handle_click = React.useCallback ((evt) => {
+		setSomeState ((prev) => prev + 1);
+	}, [setSomeState]);
+
+	const children = [
+		e ("button", {onClick: handle_click}, `Increment state with render ${someState}`),
+		e (InitialStateNotRendered, {some_state: someState, initial_state: {some_state: someState}})
+	];
+	return e("div", {}, children);
+
+};
+
+document.onreadystatechange = function ()
+{
+        if (document.readyState === 'complete')
+        {
+		const root = ReactDOM.createRoot (document.getElementById ("root_dynamic"));
+		root.render (React.createElement (App, {}, null));
+	}
+};
+
+		</script>
+	</head>
+	<body>
+		<div id="root_dynamic">	
+		</div>
+		<p>React.useReducer hook initial state is calculated once then ignored.</p>
+	</body>
+</html>
+	
