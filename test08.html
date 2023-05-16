@@ -253,6 +253,9 @@ const rendera = (svg_root) =>
 	root.y0 = 0;
 	ROOTA = root;
 	console.log ("initial root: ",JSON.stringify (root,getCircularReplacer ()));
+	// d3.select (svg_root.children.namedItem ("entity_graph")).selectAll ("*").remove ();
+	// If this function were to be called again, not running the code above results in
+	// undefined behaviour. Multiple instances of the SVG child components will co-exist.
 	update (d3.select (svg_root.children.namedItem ("entity_graph")), tree_map, root, root);
 };
 
